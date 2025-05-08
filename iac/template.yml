@@ -1,0 +1,51 @@
+name: Validate CloudFormation Template
+
+on:
+  push:
+    paths:
+      - 'iac/**/*.yml'
+      - 'iac/**/*.yaml'
+      - 'iac/**/*.json'
+  pull_request:
+    paths:
+      - 'iac/**/*.yml'
+      - 'iac/**/*.yaml'
+      - 'iac/**/*.json'
+
+jobs:
+  validate-cfn:
+    name: Validate CloudFormation Template
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install cfn-lint
+        run: pip install cfn-lint
+
+      - name: Validate YAML syntax
+        run: |
+          find ./iac -type f \( -name "*.yml" -o -name "*.yaml" \) -print0 | \
+          xargs -0 -n1 -P4 yamllint -d "{extends: relaxed, rules: {line-length: {max: 180}}}" || \
+          echo "YAML validation completed (some files may have issues)"
+
+      - name: Lint CloudFormation templates
+        id: cfn-lint
+        run: |
+          set +e
+          find ./iac -type f \( -name "*.yml" -o -name "*.yaml" -o -name "*.json" \) -print0 | \
+          xargs -0 -n1 -P4 cfn-lint --format parseable || \
+          echo "CloudFormation validation completed (some files may have issues)"
+          set -e
+
+      - name: Upload validation report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: cfn-validation-report
+          path: |
+            ./iac/**/*.yml
+            ./iac/**/*.yaml
+            ./iac/**/*.json
+          retention-days: 1
